@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>중3 경제 모의주식투자</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+      margin: 0;
+      padding: 0;
+      -webkit-text-size-adjust: 100%;
+    }
+    .price-up { color: #ef4444; }
+    .price-down { color: #22c55e; }
+    .tab-active { 
+      border-b-4 border-green-600; 
+      color: #15803d; 
+      font-weight: bold; 
+      background-color: #f0fdf4; 
+    }
+    .modal { animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn { 
+      from { opacity: 0; transform: scale(0.95); } 
+      to { opacity: 1; transform: scale(1); } 
+    }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen pb-20">
+
+  <!-- 헤더 -->
+  <div class="bg-green-600 text-white p-4">
+    <h1 class="text-xl font-bold flex items-center gap-2">
+      📈 중3 경제 모의주식투자
+    </h1>
+  </div>
+
+  <!-- 자산 요약 -->
+  <div class="bg-white mx-3 mt-3 rounded-2xl shadow p-5">
+    <div class="grid grid-cols-2 gap-4 text-sm">
+      <div>
+        <div class="flex items-center gap-2 text-gray-600 mb-1">
+          <span>💰</span><span>현금</span>
+        </div>
+        <div class="font-bold text-xl" id="cash">10,000,000원</div>
+      </div>
+      <div>
+        <div class="flex items-center gap-2 text-gray-600 mb-1">
+          <span>📦</span><span>보유주식</span>
+        </div>
+        <div class="font-bold text-xl" id="stocksValue">0원</div>
+      </div>
+    </div>
+    <div class="border-t my-4"></div>
+    <div class="flex justify-between items-center">
+      <div>
+        <div class="text-gray-600 text-sm">총자산</div>
+        <div class="text-2xl font-bold" id="total">10,000,000원</div>
+      </div>
+      <div class="text-right">
+        <div class="text-gray-600 text-sm">총손익</div>
+        <div class="text-xl font-bold" id="profit">+0원 (+0.00%)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 탭 -->
+  <div class="px-3 mt-4 flex border-b overflow-x-auto bg-white sticky top-0 z-10">
+    <button onclick="switchTab(0)" class="tab tab-active flex-1 py-3 text-center whitespace-nowrap" id="tab-0">국내주식</button>
+    <button onclick="switchTab(1)" class="tab flex-1 py-3 text-center whitespace-nowrap" id="tab-1">해외주식</button>
+    <button onclick="switchTab(2)" class="tab flex-1 py-3 text-center whitespace-nowrap" id="tab-2">보유 종목</button>
+    <button onclick="switchTab(3)" class="tab flex-1 py-3 text-center whitespace-nowrap" id="tab-3">거래 내역</button>
+    <button onclick="switchTab(4)" class="tab flex-1 py-3 text-center whitespace-nowrap" id="tab-4">🏆 랭킹</button>
+  </div>
+
+  <!-- 콘텐츠 영역 -->
+  <div class="px-3 mt-4" id="content-0"></div>
+  <div class="px-3 mt-4 hidden" id="content-1"></div>
+  <div class="px-3 mt-4 hidden" id="content-2"></div>
+  <div class="px-3 mt-4 hidden" id="content-3"></div>
+  <div class="px-3 mt-4 hidden" id="content-4"></div>
+
+  <!-- 닉네임 모달 -->
+  <div id="nickname-modal" class="fixed inset-0 bg-black/70 flex items-center justify-center z-[100] hidden">
+    <div class="bg-white rounded-3xl p-8 w-[90%] max-w-sm mx-4">
+      <h2 class="text-2xl font-bold text-center mb-6">닉네임을 입력해주세요</h2>
+      <input type="text" id="nickname-input" placeholder="예: 주식천재김학생" 
+             class="w-full px-4 py-4 text-xl border rounded-2xl focus:outline-none focus:border-green-500 text-center">
+      <button onclick="saveNickname()" class="mt-6 w-full py-4 bg-green-600 text-white rounded-2xl font-bold text-lg">확인</button>
+    </div>
+  </div>
+
+  <!-- 매수/매도 모달 -->
+  <div id="modal" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+    <div class="modal bg-white rounded-3xl w-[90%] max-w-md p-6 mx-4">
+      <h2 class="text-xl font-bold mb-4" id="modal-title"></h2>
+      <div class="text-3xl font-bold mb-6" id="modal-price"></div>
+      
+      <div class="mb-6">
+        <label class="block text-sm text-gray-600 mb-2">수량 (최소 1주)</label>
+        <div class="flex items-center gap-3">
+          <button onclick="changeQty(-1)" class="w-12 h-12 bg-gray-100 rounded-2xl text-2xl font-bold">-</button>
+          <input type="number" id="qty-input" value="1" min="1" class="text-center text-3xl font-bold w-24 focus:outline-none border rounded-xl">
+          <button onclick="changeQty(1)" class="w-12 h-12 bg-gray-100 rounded-2xl text-2xl font-bold">+</button>
+        </div>
+      </div>
+
+      <div class="bg-gray-50 p-4 rounded-2xl mb-6">
+        <div class="flex justify-between text-sm">
+          <span class="text-gray-600">거래 금액</span>
+          <span class="font-bold" id="trade-amount">0원</span>
+        </div>
+      </div>
+
+      <div class="flex gap-3">
+        <button onclick="closeModal()" class="flex-1 py-4 bg-gray-200 rounded-2xl font-bold">취소</button>
+        <button id="modal-action-btn" class="flex-1 py-4 rounded-2xl font-bold text-white"></button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let user = { 
+      cash: 10000000, 
+      holdings: {}, 
+      transactions: [], 
+      name: "학생" 
+    };
+    
+    let currentTab = 0;
+    let currentCategory = "domestic";
+    let currentStock = null;
+    let isBuying = true;
+
+    let allStocks = {
+      domestic: [
+        { name: "삼성전자", code: "005930", price: 49367, change: 0, history: [48000,47500,48200,49000,49500,49800,49367] },
+        { name: "SK하이닉스", code: "000660", price: 78374, change: -1.73, history: [76000,81000,83000,78000,75000,80000,78374] },
+        { name: "현대차", code: "005380", price: 103622, change: 0.28, history: [95000,98000,105000,108000,104000,103000,103622] },
+        { name: "카카오", code: "035720", price: 95009, change: -0.51, history: [89000,92000,94000,97000,96000,95500,95009] },
+        { name: "네이버", code: "035420", price: 69729, change: -0.04, history: [78000,80000,79000,76000,72000,70000,69729] },
+        { name: "LG에너지솔루션", code: "373220", price: 86964, change: -0.87, history: [98000,95000,92000,90000,88000,87000,86964] },
+        { name: "셀트리온", code: "068270", price: 57030, change: -0.43, history: [63000,61000,59000,58000,57500,57200,57030] },
+        { name: "두산에너빌리티", code: "034020", price: 79601, change: 0.41, history: [82000,78000,75000,77000,76000,79000,79601] },
+        { name: "한화에어로", code: "272210", price: 116419, change: 0.21, history: [115000,112000,120000,118000,115500,116000,116419] },
+        { name: "삼성중공업", code: "010140", price: 80186, change: 0.49, history: [87000,85000,82000,79000,78000,80000,80186] }
+      ],
+      overseas: [
+        { name: "Apple", code: "AAPL", price: 238500, change: 0.8, history: [230000,232000,235000,237000,238000,239000,238500] },
+        { name: "Microsoft", code: "MSFT", price: 412300, change: -0.3, history: [415000,413000,411000,410000,412000,413500,412300] },
+        { name: "NVIDIA", code: "NVDA", price: 128700, change: 2.1, history: [118000,122000,125000,127000,126500,128000,128700] },
+        { name: "Amazon", code: "AMZN", price: 189200, change: 1.4, history: [182000,184000,186000,187500,188000,189000,189200] },
+        { name: "Google", code: "GOOGL", price: 178900, change: -0.7, history: [180000,179500,179000,178000,179200,179000,178900] },
+        { name: "Meta", code: "META", price: 512400, change: 0.9, history: [498000,502000,505000,510000,511000,512000,512400] },
+        { name: "Tesla", code: "TSLA", price: 287300, change: -1.8, history: [295000,292000,290000,288000,285000,288000,287300] },
+        { name: "Broadcom", code: "AVGO", price: 178500, change: 1.6, history: [170000,172000,174000,175500,177000,178000,178500] },
+        { name: "AMD", code: "AMD", price: 142800, change: 0.5, history: [138000,140000,141000,142000,142500,143000,142800] },
+        { name: "Netflix", code: "NFLX", price: 892000, change: -0.4, history: [900000,898000,895000,893000,892500,893000,892000] }
+      ]
+    };
+
+    let mockUsers = [
+      { name: "주식천재김학생", total: 12845000, profitRate: 28.45 },
+      { name: "버핏이되고싶은아이", total: 11520000, profitRate: 15.2 },
+      { name: "삼성전자러버", total: 10980000, profitRate: 9.8 },
+      { name: "테슬라덕후", total: 14230000, profitRate: 42.3 },
+      { name: "안정투자왕", total: 9800000, profitRate: -2.0 },
+    ];
+
+    function formatPrice(price) {
+      return price.toLocaleString('ko-KR') + '원';
+    }
+
+    function getCurrentStocks() {
+      return currentCategory === "domestic" ? allStocks.domestic : allStocks.overseas;
+    }
+
+    function getAllStocks() {
+      return [...allStocks.domestic, ...allStocks.overseas];
+    }
+
+    function updateAssetSummary() {
+      let totalStocksValue = 0;
+      Object.keys(user.holdings).forEach(code => {
+        const stock = getAllStocks().find(s => s.code === code);
+        if (stock) totalStocksValue += user.holdings[code].qty * stock.price;
+      });
+
+      const totalAsset = user.cash + totalStocksValue;
+      const profit = totalAsset - 10000000;
+      const profitRate = (profit / 10000000 * 100).toFixed(2);
+
+      document.getElementById('cash').textContent = formatPrice(user.cash);
+      document.getElementById('stocksValue').textContent = formatPrice(totalStocksValue);
+      document.getElementById('total').textContent = formatPrice(totalAsset);
+      
+      const profitEl = document.getElementById('profit');
+      profitEl.textContent = `${profit >= 0 ? '+' : ''}${formatPrice(profit)} (${profit >= 0 ? '+' : ''}${profitRate}%)`;
+      profitEl.className = `text-xl font-bold ${profit >= 0 ? 'text-red-500' : 'text-green-500'}`;
+    }
+
+    function getHolding(code) {
+      return user.holdings[code] || {qty: 0, avgPrice: 0};
+    }
+
+    function createStockElement(stock) {
+      const holding = getHolding(stock.code);
+      const holdingValue = holding.qty * stock.price;
+      const profit = holding.qty ? (stock.price - holding.avgPrice) * holding.qty : 0;
+      const profitRate = holding.qty ? ((stock.price - holding.avgPrice) / holding.avgPrice * 100).toFixed(2) : 0;
+
+      const div = document.createElement('div');
+      div.className = "bg-white rounded-3xl shadow p-5 mb-4";
+
+      let html = `
+        <div class="flex justify-between">
+          <div>
+            <div class="font-bold text-lg">${stock.name}</div>
+            <div class="text-sm text-gray-500">${stock.code}</div>
+          </div>
+          <div class="text-right">
+            <div class="text-2xl font-bold ${stock.change >= 0 ? 'price-up' : 'price-down'}" id="price-${stock.code}">
+              ${formatPrice(stock.price)}
+            </div>
+            <div class="text-sm ${stock.change >= 0 ? 'text-red-500' : 'text-green-500'}">
+              ${stock.change >= 0 ? '▲' : '▼'} ${Math.abs(stock.change)}%
+            </div>
+          </div>
+        </div>
+        <div class="h-20 mt-4 mb-4">
+          <canvas id="chart-${stock.code}"></canvas>
+        </div>
+      `;
+
+      if (holding.qty > 0) {
+        html += `
+          <div class="bg-gray-50 p-4 rounded-2xl mb-4 text-sm">
+            <div class="flex justify-between mb-1"><span>보유 수량</span><span class="font-bold">${holding.qty}주</span></div>
+            <div class="flex justify-between mb-1"><span>평균 단가</span><span>${formatPrice(holding.avgPrice)}</span></div>
+            <div class="flex justify-between mb-1"><span>평가 금액</span><span class="font-bold">${formatPrice(holdingValue)}</span></div>
+            <div class="flex justify-between"><span>손익</span>
+              <span class="${profit >= 0 ? 'text-red-500' : 'text-green-500'} font-bold">
+                ${profit >= 0 ? '+' : ''}${formatPrice(profit)} (${profitRate}%)
+              </span>
+            </div>
+          </div>
+        `;
+      }
+
+      html += `
+        <div class="flex gap-3">
+          <button onclick="showTradeModal('${stock.code}', true)" class="flex-1 bg-red-500 text-white py-4 rounded-2xl font-bold">매수</button>
+          <button onclick="showTradeModal('${stock.code}', false)" class="flex-1 bg-blue-500 text-white py-4 rounded-2xl font-bold ${holding.qty === 0 ? 'opacity-50 pointer-events-none' : ''}">매도</button>
+        </div>
+      `;
+
+      div.innerHTML = html;
+      return div;
+    }
+
+    function renderStocks() {
+      const container = document.getElementById(`content-${currentTab}`);
+      container.innerHTML = '';
+      getCurrentStocks().forEach(stock => container.appendChild(createStockElement(stock)));
+      renderCharts();
+    }
+
+    function renderHoldings() {
+      const container = document.getElementById('content-2');
+      container.innerHTML = '<h2 class="text-lg font-bold mb-4">보유 종목</h2>';
+      const held = getAllStocks().filter(s => getHolding(s.code).qty > 0);
+      if (held.length === 0) {
+        container.innerHTML += `<p class="text-center text-gray-500 py-12">보유한 주식이 없습니다.<br>매수해보세요!</p>`;
+        return;
+      }
+      held.forEach(stock => container.appendChild(createStockElement(stock)));
+      renderCharts();
+    }
+
+    function renderTransactions() {
+      const container = document.getElementById('content-3');
+      container.innerHTML = '<h2 class="text-lg font-bold mb-4">최근 거래 내역</h2>';
+      
+      if (user.transactions.length === 0) {
+        container.innerHTML += `<p class="text-center text-gray-500 py-12">아직 거래 내역이 없습니다.<br>주식을 매수해보세요!</p>`;
+        return;
+      }
+
+      const div = document.createElement('div');
+      div.className = "space-y-3";
+      user.transactions.forEach(t => {
+        const item = document.createElement('div');
+        item.className = "bg-white rounded-2xl p-4 flex justify-between items-center";
+        item.innerHTML = `
+          <div>
+            <div class="font-medium">${t.name}</div>
+            <div class="text-sm text-gray-500">${t.time}</div>
+          </div>
+          <div class="text-right">
+            <div class="${t.type === '매수' ? 'text-red-500' : 'text-blue-500'} font-bold">${t.type} ${t.qty}주</div>
+            <div class="text-sm">${formatPrice(t.amount)}</div>
+          </div>
+        `;
+        div.appendChild(item);
+      });
+      container.appendChild(div);
+    }
+
+    function renderRankings() {
+      const container = document.getElementById('content-4');
+      container.innerHTML = `<h2 class="text-lg font-bold mb-4">🏆 실시간 랭킹 (총자산 기준)</h2>`;
+      
+      let totalStocksValue = 0;
+      Object.keys(user.holdings).forEach(code => {
+        const stock = getAllStocks().find(s => s.code === code);
+        if (stock) totalStocksValue += user.holdings[code].qty * stock.price;
+      });
+      const myTotal = user.cash + totalStocksValue;
+      const myProfitRate = ((myTotal - 10000000) / 10000000 * 100).toFixed(1);
+
+      let allRankings = [
+        ...mockUsers,
+        { name: user.name, total: myTotal, profitRate: parseFloat(myProfitRate) }
+      ];
+
+      allRankings.sort((a, b) => b.total - a.total);
+
+      const rankList = document.createElement('div');
+      rankList.className = "space-y-3";
+
+      allRankings.forEach((player, index) => {
+        const isMe = player.name === user.name;
+        const rankItem = document.createElement('div');
+        rankItem.className = `bg-white rounded-2xl p-4 flex items-center gap-4 ${isMe ? 'ring-2 ring-green-500' : ''}`;
+        rankItem.innerHTML = `
+          <div class="w-8 h-8 flex items-center justify-center text-xl font-bold ${index < 3 ? 'text-amber-500' : 'text-gray-400'}">
+            ${index + 1}
+          </div>
+          <div class="flex-1">
+            <div class="font-medium ${isMe ? 'text-green-600' : ''}">${player.name} ${isMe ? '(나)' : ''}</div>
+          </div>
+          <div class="text-right">
+            <div class="font-bold">${formatPrice(player.total)}</div>
+            <div class="text-sm ${player.profitRate >= 0 ? 'text-red-500' : 'text-green-500'}">
+              ${player.profitRate >= 0 ? '+' : ''}${player.profitRate}%
+            </div>
+          </div>
+        `;
+        rankList.appendChild(rankItem);
+      });
+
+      container.appendChild(rankList);
+    }
+
+    function renderCharts() {
+      setTimeout(() => {
+        getCurrentStocks().forEach(stock => {
+          const canvas = document.getElementById(`chart-${stock.code}`);
+          if (canvas) {
+            if (canvas.chart) canvas.chart.destroy();
+            canvas.chart = new Chart(canvas, {
+              type: 'line',
+              data: { 
+                labels: Array(stock.history.length).fill(''), 
+                datasets: [{ 
+                  data: stock.history, 
+                  borderColor: stock.change >= 0 ? '#ef4444' : '#22c55e', 
+                  borderWidth: 2.5, 
+                  tension: 0.3, 
+                  pointRadius: 0 
+                }] 
+              },
+              options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                plugins: { legend: { display: false }, tooltip: { enabled: false } }, 
+                scales: { x: { display: false }, y: { display: false } } 
+              }
+            });
+          }
+        });
+      }, 150);
+    }
+
+    function switchTab(tab) {
+      currentTab = tab;
+      if (tab === 0 || tab === 1) currentCategory = tab === 0 ? "domestic" : "overseas";
+
+      document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('tab-active', i === tab));
+
+      for (let i = 0; i <= 4; i++) {
+        const el = document.getElementById(`content-${i}`);
+        if (el) el.classList.toggle('hidden', i !== tab);
+      }
+
+      if (tab === 0 || tab === 1) renderStocks();
+      if (tab === 2) renderHoldings();
+      if (tab === 3) renderTransactions();
+      if (tab === 4) renderRankings();
+    }
+
+    function showTradeModal(code, buying) {
+      const all = getAllStocks();
+      currentStock = all.find(s => s.code === code);
+      isBuying = buying;
+
+      document.getElementById('modal-title').textContent = `${currentStock.name} ${buying ? '매수' : '매도'}`;
+      document.getElementById('modal-price').textContent = formatPrice(currentStock.price);
+      document.getElementById('modal-action-btn').textContent = buying ? '매수하기' : '매도하기';
+      document.getElementById('modal-action-btn').className = `flex-1 py-4 rounded-2xl font-bold text-white ${buying ? 'bg-red-500' : 'bg-blue-500'}`;
+      document.getElementById('modal-action-btn').onclick = executeTrade;
+
+      document.getElementById('qty-input').value = 1;
+      updateTradeAmount();
+      document.getElementById('modal').classList.remove('hidden');
+    }
+
+    function changeQty(amount) {
+      const input = document.getElementById('qty-input');
+      let qty = parseInt(input.value) || 1;
+      qty = Math.max(1, qty + amount);
+      input.value = qty;
+      updateTradeAmount();
+    }
+
+    function updateTradeAmount() {
+      const qty = parseInt(document.getElementById('qty-input').value) || 1;
+      document.getElementById('trade-amount').textContent = formatPrice(qty * currentStock.price);
+    }
+
+    function executeTrade() {
+      const qty = parseInt(document.getElementById('qty-input').value) || 1;
+      if (qty < 1) return alert("수량은 1주 이상 입력해주세요!");
+
+      const totalAmount = qty * currentStock.price;
+
+      if (isBuying) {
+        if (user.cash < totalAmount) return alert('현금이 부족합니다!');
+        user.cash -= totalAmount;
+        if (!user.holdings[currentStock.code]) user.holdings[currentStock.code] = {qty: 0, avgPrice: 0};
+        const h = user.holdings[currentStock.code];
+        const totalCost = h.qty * h.avgPrice + totalAmount;
+        h.qty += qty;
+        h.avgPrice = Math.round(totalCost / h.qty);
+      } else {
+        const h = user.holdings[currentStock.code];
+        if (!h || h.qty < qty) return alert('매도할 주식이 부족합니다!');
+        user.cash += totalAmount;
+        h.qty -= qty;
+        if (h.qty === 0) delete user.holdings[currentStock.code];
+      }
+
+      user.transactions.unshift({
+        name: currentStock.name,
+        type: isBuying ? '매수' : '매도',
+        qty: qty,
+        amount: totalAmount,
+        time: new Date().toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+      });
+
+      if (user.transactions.length > 30) user.transactions.pop();
+
+      closeModal();
+      refreshAll();
+    }
+
+    function closeModal() {
+      document.getElementById('modal').classList.add('hidden');
+    }
+
+    function refreshAll() {
+      updateAssetSummary();
+      if (currentTab === 0 || currentTab === 1) renderStocks();
+      if (currentTab === 2) renderHoldings();
+      if (currentTab === 3) renderTransactions();
+      if (currentTab === 4) renderRankings();
+    }
+
+    function simulatePriceChange() {
+      getAllStocks().forEach(stock => {
+        const changeAmount = Math.floor(Math.random() * 2500) - 900;
+        stock.price = Math.max(5000, Math.round(stock.price + changeAmount));
+        const prev = stock.history[stock.history.length-1];
+        stock.change = parseFloat(((stock.price - prev) / prev * 100).toFixed(2));
+        stock.history.shift();
+        stock.history.push(stock.price);
+      });
+      refreshAll();
+    }
+
+    function saveNickname() {
+      let name = document.getElementById('nickname-input').value.trim();
+      if (name.length < 2) name = "학생" + Math.floor(Math.random()*999);
+      user.name = name;
+      document.getElementById('nickname-modal').classList.add('hidden');
+      switchTab(0);
+    }
+
+    window.onload = () => {
+      document.getElementById('nickname-modal').classList.remove('hidden');
+      updateAssetSummary();
+      switchTab(0);
+      setInterval(simulatePriceChange, 4000);
+    };
+  </script>
+</body>
+</html>
